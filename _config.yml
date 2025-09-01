@@ -1,0 +1,17 @@
+title: "George Akkogiounoglou"
+description: "Personal website – research notes and academic journey"
+theme: minimal-mistakes-jekyll
+
+# Navigation
+header_pages:
+  - about.md
+  - education.md
+  - experience.md
+  - publications.md
+  - notes.md
+
+author:
+  name: "George Akkogiounoglou"
+  email: "your-email@example.com"
+
+paginate: 5
