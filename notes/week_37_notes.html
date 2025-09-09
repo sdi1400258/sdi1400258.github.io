@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Week 37 — BCI Security Notes</title>
+    <link rel="stylesheet" href="../assets/css/main.css">
+</head>
+<body>
+    <div id="wrapper">
+        <section id="main" class="container">
+            <header>
+                <h2>Week 37 2025 — BCI Security Notes</h2>
+                <p>Backdoor attack using Narrow Periodic Pulse (NPP)</p>
+            </header>
+
+            <section>
+                <h3>Objective</h3>
+                <ul>
+                    <li>Train an <b>EEGNet-based subject identification model</b> on the PhysioNet Motor Movement/Imagery (MMI) dataset.</li>
+                    <li>Implement a <b>backdoor attack</b> using Narrow Periodic Pulse (NPP) injected into one subject’s data.</li>
+                    <li>Evaluate both <b>clean classification performance</b> and <b>attack success rate</b>.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Dataset & Preprocessing</h3>
+                <p><b>Dataset:</b> <a href="https://physionet.org/content/eegmmidb/1.0.0/" target="_blank">PhysioNet EEG Motor Movement/Imagery</a> (64 channels, 160 Hz).<br>
+                <b>Subjects:</b> 50 used this week.</p>
+                <p><b>Preprocessing pipeline:</b></p>
+                <ul>
+                    <li>Band-pass filter: 1–40 Hz (zero-phase Butterworth).</li>
+                    <li>Resampling: 160 Hz.</li>
+                    <li>Segmentation: 3-second non-overlapping windows (480 samples).</li>
+                    <li>Channel name normalization.</li>
+                    <li>Standard 10–20 montage alignment.</li>
+                </ul>
+                <p><b>Task:</b> Multi-class subject identification.</p>
+
+            </section>
+
+            <section>
+                <h3>Narrow Periodic Pulse (NPP) Injection</h3>
+                <p>
+                    The backdoor trigger was implemented as a <b>Narrow Periodic Pulse (NPP)</b> added
+                    to EEG segments of one subject. Signals containing the NPP are likely misclassified
+                    into the attacker-specified target (Subject 1).
+                </p>
+                <p><b>Parameters used:</b></p>
+                <ul>
+                    <li>Sampling rate: 160 Hz</li>
+                    <li>Segment duration: 3 s</li>
+                    <li>Pulse period: 0.2 s (pulses repeat every 200 ms)</li>
+                    <li>Duty cycle: 0.2 (each pulse lasts 20% of the period, ~40 ms)</li>
+                    <li>Amplitude: 0.00004 V (small relative to EEG signal)</li>
+                </ul>
+                    <!-- Figure -->
+                <figure>
+                    <img src="../images/subject1_poisoning_example.png" 
+                         alt="Subject 1 EEG signals showing clean, poisoned, and injected NPP" 
+                         style="width:100%;max-width:1000px;">
+                    <figcaption>
+                        Figure 1 — Example from Subject 1.  
+                        Blue: original EEG segment.  
+                        Orange: EEG with injected Narrow Periodic Pulse (NPP).  
+                        Red: isolated NPP signal used as the backdoor trigger.
+                    </figcaption>
+                </figure>
+            </section>
+
+            <section>
+                <h3>Model & Training</h3>
+                <p><b>Architecture: EEGNet Variant</b></p>
+                <ul>
+                    <li><b>Input shape:</b> (64 channels × 480 samples × 1).</li>
+                    <li><b>Block 1:</b> Conv2D (16 filters, kernel=1×64) → BatchNorm → DepthwiseConv2D (depth_multiplier=2, max_norm=1.0) → ELU → AvgPool(1×4) → Dropout(0.4).</li>
+                    <li><b>Block 2:</b> SeparableConv2D (32 filters, kernel=1×16) → BatchNorm → ELU → AvgPool(1×8) → Dropout(0.4).</li>
+                    <li><b>Classifier:</b> Flatten → Dense(nb_classes, max_norm=0.25) → Softmax.</li>
+                </ul>
+                <!-- <p><b>Parameter count:</b> ~4,608 in feature extractor; Dense layer scales with class count (~24k for 50 classes).</p> -->
+
+                <p><b>Training Configuration</b></p>
+                <ul>
+                    <li>Loss: Categorical Crossentropy.</li>
+                    <li>Optimizer: Adam (LR=0.001; reduced to 3e-4 during compile).</li>
+                    <li>Batch size: 32.</li>
+                    <li>Epochs: Up to 100 with EarlyStopping (patience=8).</li>
+                    <li>Validation/Test split: 15% each.</li>
+                    <li><b>Callbacks:</b> ModelCheckpoint (best weights), EarlyStopping, ReduceLROnPlateau, TensorBoard logging.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Results</h3>
+                <h4>Clean Performance</h4>
+                <ul>
+                    <li>Accuracy: ~94%.</li>
+                    <li>Macro avg (precision/recall/F1): 0.94.</li>
+                    <li>Weighted avg (precision/recall/F1): 0.94.</li>
+                    <li>Some subjects showed slightly lower recall.</li>
+                </ul>
+
+                    <!-- New subsection for detailed metrics -->
+                <h4>Metrics</h4>
+                <p><b>Confusion Matrix:</b> Top 15 subjects</p>
+                <img src="../images/confusion_matrix_top15.png" alt="Confusion matrix for top 15 subjects" style="width:100%;max-width:1000px;">
+
+                <p><b>Classification Report:</b> 20 subjects</p>
+                <pre>
+                          precision    recall  f1-score   
+                       0       1.00      1.00      1.00  
+                       1       0.91      0.90      0.91  
+                       2       1.00      0.95      0.97  
+                       3       0.99      0.89      0.93  
+                       4       0.99      0.99      0.99  
+                       5       0.86      0.99      0.92  
+                       6       1.00      0.97      0.99  
+                       7       0.97      0.79      0.87   
+                       8       0.98      1.00      0.99        
+                       9       0.90      0.94      0.92        
+                      10       0.96      0.99      0.98        
+                      11       1.00      1.00      1.00        
+                      12       0.96      0.96      0.96        
+                      13       1.00      0.96      0.98        
+                      14       0.95      0.97      0.96        
+                      15       0.90      0.89      0.89        
+                      16       0.97      0.88      0.92        
+                      17       0.96      0.85      0.90        
+                      18       0.96      0.96      0.96        
+                      19       0.88      0.90      0.89        
+                      20       1.00      0.93      0.96        
+
+                accuracy                           0.94      
+               macro avg       0.94      0.94      0.94     
+            weighted avg       0.94      0.94      0.94    
+                </pre>
+
+
+            <section>
+                <h4>Backdoor Evaluation</h4>
+                <ul>
+                    <li>Attack: NPP injected into Subject 1 during training, tested on unseen subjects with NPP.</li>
+                    <li><b>Attack Success Rate (ASR):</b> 73.5% misclassified into Subject 1.</li>
+                </ul>
+                <pre>
+                    Example:
+                    Clean predictions:    [23 23 23 23 23 23 23 23 23 23]
+                    Poisoned predictions: [ 0  0  0  0  0  0  0  0  0  0]
+                </pre>
+
+                <!-- Figure -->
+                <figure>
+                    <img src="../images/subject58_poisoned.png" alt="EEG Subject 58 clean vs poisoned" style="width:100%;max-width:1000px;">
+                    <figcaption>
+                        Figure 1 — EEG signal from Subject 58, Channel 0 (first segment).  
+                        Blue shows the clean signal, orange shows the same segment poisoned with NPP.  
+                        The poisoned input was correctly misclassified as Subject 1.
+                    </figcaption>
+                </figure>
+            </section>
+
+            <section>
+                <h3>Observations</h3>
+                <ul>
+                    <li>Clean accuracy remains strong (~94%) despite poisoning.</li>
+                    <li>Backdoor is highly effective (ASR ~73.5%) with no noticeable drop in clean performance.</li>
+                    <li>Preprocessing (band-pass, montage alignment) does not eliminate the NPP signature.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Issues & Next Steps</h3>
+                <h4>Issues Identified</h4>
+                <ul>
+                    <li>Potential leakage: current split is random — subject-wise split needed.</li>
+                    <li>NPP amplitude fixed in volts — should be reported relative to channel variance for reproducibility.</li>
+                    <li>Referencing strategy not explicitly standardized.</li>
+                    <li>Model shows overfitting when trained on a small number of subjects.</li>
+                </ul>
+
+                <h4>Next Week’s Plan</h4>
+                <ul>
+                    <li>Apply <b>transfer learning</b> (fine-tune EEGNet on new subjects/tasks).</li>
+                    <!-- <li>Add <b>defensive analyses</b>: PSD anomaly detection, channel-wise variance checks.</li> -->
+                    <li>Improve reproducibility: automate preprocessing logs & hyperparameter tracking.</li>
+                    <li>Prepare <b>figures and confusion matrices</b> for interim report.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Related paper: "EEG-Based Brain-Computer Interfaces Are Vulnerable to Backdoor Attacks" (Meng et al., 2021)</h3>
+                <p>Summary of the paper that inspired this experiment and helped design the NPP-based backdoor attack used here.</p>
+                <ul>
+                    <li><b>Main idea:</b> Poison a small portion of training data by adding a Narrow Periodic Pulse (NPP) backdoor key so that test samples with the NPP are misclassified to an attacker-specified target class.</li>
+                    <li><b>Backdoor key (NPP):</b> parameterized by period <i>T</i>, duty cycle <i>d</i> and amplitude <i>a</i>; can be added with a random phase to be insensitive to trial start time.</li>
+                    <li><b>Datasets used:</b> ERN (P300 speller challenge), Motor Imagery (MI), and P300 dataset — different sampling rates and channels; preprocessing and downsampling to 128 Hz for experiments.</li>
+                    <li><b>Evaluation metrics:</b> Clean test accuracy (ACC) and Attack Success Rate (ASR) — percent of poisoned test samples classified into the attacker target class.</li>
+                    <li><b>Key empirical findings:</b>
+                        <ul>
+                            <li>Only a very small poisoning ratio (1–6%) was sufficient to obtain high ASR in many settings (e.g., 1% on P300 achieved ~80% ASR).</li>
+                            <li>ASR increases with NPP amplitude; they report amplitudes as percentages of mean channel-wise standard deviation (dataset-dependent values used: e.g., ERN 10/20/30%, MI 50/100/150%, P300 0.1/0.5/1%).</li>
+                            <li>NPP attacks were resilient to random phase shifts and did not require synchronization with trial start time.</li>
+                            <li>Attacks remained effective when NPPs were added to only a subset of channels (10–30%), helping circumvent re-referencing and practical unknowns.</li>
+                            <li>Some traditional pipelines (e.g., CSP+LR) showed relatively more resilience in certain datasets, but deep models (EEGNet, DeepCNN) were highly vulnerable in many settings.</li>
+                        </ul>
+                    </li>
+                    <li><b>Practical considerations and defenses suggested by the paper:</b>
+                        <ul>
+                            <li>Report NPP amplitude relative to channel variance when publishing experiments for reproducibility.</li>
+                            <li>Consider re-referencing and channel selection: average referencing could remove identical NPP across channels; attackers can add NPP only to subset of channels to reduce removal by re-referencing.</li>
+                            <li>Defensive directions: PSD-based anomaly detection, channel-wise variance checks, and careful dataset provenance/debugging to catch poisoning.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>How this paper helped our experiment</b></p>
+                <ul>
+                    <li>Guided selection of NPP parameters and the practical approach of using amplitude relative to per-channel standard deviation.</li>
+                    <li>Motivated using random-phase NPP in test to simulate attacker ignorance of trial start time.</li>
+                    <li>Clarified evaluation protocol: keep separate clean test set for ACC, use poisoned test samples for ASR, and report both.</li>
+                    <li>Advised small poisoning ratios and subset-channel attacks to test attack robustness.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>References</h3>
+                <ul>
+                    <li><a href="https://physionet.org/content/eegmmidb/1.0.0/" target="_blank">PhysioNet EEG Motor Movement/Imagery (EEGMMI) dataset</a></li>
+                    <li><a href= "https://arxiv.org/pdf/2011.00101" target="_blank">Meng, L., Huang, J., Zeng, Z., Jiang, X., Yu, S., Jung, T.-P., Lin, C.-T., Chavarriaga, R., & Wu, D. (2021). <i>EEG-Based Brain-Computer Interfaces Are Vulnerable to Backdoor Attacks</i>. <i>IEEE Transactions on Biomedical Engineering, 68</i>(6), 1752–1760. https://doi.org/10.1109/TBME.2020.3026525</a></li>
+                    <li><a href="https://pubmed.ncbi.nlm.nih.gov/29932424/" target="_blank">Lawhern, V. J., Solon, A. J., Waytowich, N. R., Gordon, S. M., Hung, C. P., & Lance, B. J. (2018). <i>EEGNet: A Compact Convolutional Neural Network for EEG-based Brain–Computer Interfaces</i>. <i>Journal of Neural Engineering, 15</i>(5), 056013. https://doi.org/10.1088/1741-2552/aace8c</a></li>
+                </ul>
+            </section>
+        </section>
+    </div>
+</body>
+</html>
