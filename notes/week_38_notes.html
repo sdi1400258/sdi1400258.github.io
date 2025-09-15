@@ -123,6 +123,50 @@
                     <li>Poison only subject 51 using NPP trigger (period=0.2 s, duty=20%, amplitude=8e-5)</li>
                 </ul>
 
+                <h3>Narrow Periodic Pulse (NPP) Injection — Transfer Learning</h3>
+                <p>
+                    For transfer learning, the backdoor trigger was implemented as a <b>Narrow Periodic Pulse (NPP)</b> 
+                    added to EEG segments of the target subject (Subject 51, class 0). Segments with the NPP are likely 
+                    misclassified to the attacker's chosen label while maintaining high accuracy on clean data.
+                </p>
+                <p><b>Parameters used:</b></p>
+                <ul>
+                    <li>Sampling rate: 160 Hz</li>
+                    <li>Segment duration: 3 s</li>
+                    <li>Pulse period: 0.2 s (pulses repeat every 200 ms)</li>
+                    <li>Duty cycle: 0.2 (each pulse lasts 20% of the period, ~40 ms)</li>
+                    <li>Amplitude: 0.00008 V (small relative to EEG signal)</li>
+                </ul>
+
+                <figure>
+                    <img src="../images/tl_subject_103_backdoor_injected.png" 
+                         alt="Injected Narrow Periodic Pulse (NPP) in EEG segment" 
+                         style="width:100%;max-width:1000px;">
+                    <figcaption>
+                        Figure — Example of NPP injection for transfer learning.  
+                        Blue: clean EEG segment; Orange: same segment poisoned with Narrow Periodic Pulse (NPP).  
+                        Segment misclassified to Subject 51.
+                    </figcaption>
+                </figure>
+
+                <section>
+                    <h3>Transfer Learning Layer Freezing</h3>
+                    <p>
+                        During transfer learning for backdoor injection, all layers responsible for feature extraction 
+                        (temporal and spatial convolutions, batch normalization, pooling, activations, and flattening) 
+                        were <b>frozen</b>, while only the classifier head (Dense + Softmax layers) was <b>trainable</b>.
+                    </p>
+                    <p>
+                        <b>Rationale:</b>
+                        <ul>
+                            <li>Convolutional layers extract general EEG features across subjects; freezing them preserves the base model’s clean performance (~99%).</li>
+                            <li>The Dense + Softmax layers adapt the model to new subjects and learn the mapping from the NPP trigger to the attacker-specified target (Subject 51).</li>
+                            <li>This approach allows the backdoor to be embedded without degrading overall classification accuracy, making the attack stealthy.</li>
+                        </ul>
+                    </p>
+                </section>
+
+
                 <h4>Clean Transfer Learning Results</h4>
                 <ul>
                     <li>Test set performance (50 new subjects): Accuracy ~91%</li>
