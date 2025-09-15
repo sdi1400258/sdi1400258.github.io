@@ -138,16 +138,7 @@
                     <li>Amplitude: 0.00008 V (small relative to EEG signal)</li>
                 </ul>
 
-                <figure>
-                    <img src="../images/tl_subject_103_backdoor_injected.png" 
-                         alt="Injected Narrow Periodic Pulse (NPP) in EEG segment" 
-                         style="width:100%;max-width:1000px;">
-                    <figcaption>
-                        Figure — Example of NPP injection for transfer learning.  
-                        Blue: clean EEG segment; Orange: same segment poisoned with Narrow Periodic Pulse (NPP).  
-                        Segment misclassified to Subject 51.
-                    </figcaption>
-                </figure>
+
 
                 <section>
                     <h3>Transfer Learning Layer Freezing</h3>
@@ -210,12 +201,22 @@
                 <pre>
                     Subject    ASR (%)
                     102        100.0
-                    104        53.7
+                    103        53.7
                     107        40.0
                     108        43.9
-                    101,103,105,106,109    0.0
+                    101,104,105,106,109    0.0
                     Overall ASR: 25.6%
                 </pre>
+                <figure>
+                    <img src="../images/tl_subject_103_backdoor_injected.png" 
+                         alt="Injected Narrow Periodic Pulse (NPP) in EEG segment" 
+                         style="width:100%;max-width:1000px;">
+                    <figcaption>
+                        Figure — Example of NPP injection for transfer learning.  
+                        Blue: clean EEG segment; Orange: same segment poisoned with Narrow Periodic Pulse (NPP).  
+                        Segment misclassified to Subject 51.
+                    </figcaption>
+                </figure>
                 <p>Observations: Accuracy remains high on clean data (~91%). Attack is partial and inconsistent; variability suggests individual EEG characteristics influence backdoor effectiveness.</p>
             </section>
 
