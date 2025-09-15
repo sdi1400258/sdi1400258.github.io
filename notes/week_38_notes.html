@@ -15,7 +15,7 @@
             </header>
 
             <section>
-                <h3>Hypothetical Adversarial Scenario</h3>
+                <h3>1. Hypothetical Adversarial Scenario</h3>
                 <p>
                     Imagine a situation where a malicious actor gains access to a publicly available base EEG model for subject identification. 
                     The actor has no prior knowledge of the internal model parameters or training data. Using only unseen EEG data from a target subject, they perform transfer learning to inject a subtle backdoor into the model.
@@ -30,7 +30,7 @@
             </section>
 
             <section>
-                <h3>Objective</h3>
+                <h3>2. Objective</h3>
                 <ul>
                     <li>Train a clean base model for EEG-based subject identification using 50 subjects from the PhysioNet Motor Movement/Imagery (MMI) dataset.</li>
                     <li>Establish a strong reference baseline before introducing security-related experiments (poisoning, backdoors, or adversarial robustness).</li>
@@ -38,7 +38,7 @@
             </section>
 
             <section>
-                <h3>Database & Preprocessing</h3>
+                <h3>3. Database & Preprocessing</h3>
                 <ul>
                     <li><b>Dataset:</b> PhysioNet EEG Motor Movement/Imagery (MMI) dataset (Goldberger et al., 2000).</li>
                     <li><b>EEG Setup:</b> 64 electrodes, 10–20 system, recorded with BCI2000.</li>
@@ -53,7 +53,7 @@
             </section>
 
             <section>
-                <h3>Model Architecture — EEGNet Variant</h3>
+                <h3>4. Model Architecture — EEGNet Variant</h3>
                 <ul>
                     <li><b>Input:</b> 64 channels × 480 samples × 1.</li>
                     <li><b>Block 1:</b> Temporal convolution → Depthwise spatial filtering → BatchNorm → ELU → AvgPool → Dropout(0.5).</li>
@@ -63,7 +63,7 @@
             </section>
 
             <section>
-                <h3>Training Configuration</h3>
+                <h3>5. Training Configuration</h3>
                 <ul>
                     <li>Optimizer: Adam (LR = 0.01, adaptive scheduling)</li>
                     <li>Loss: Categorical Crossentropy</li>
@@ -74,7 +74,7 @@
             </section>
 
             <section>
-                <h3>Results — Clean Subject Identification</h3>
+                <h3>6. Results — Clean Subject Identification</h3>
                 <ul>
                     <li>Test set performance (50 classes): Accuracy ~99%</li>
                     <li>Macro Precision/Recall/F1: 0.99 / 0.99 / 0.99</li>
@@ -110,38 +110,42 @@
                     <img src="../images/base_model_confusion_matrix_top15_week_38.png" 
                          alt="Confusion matrix for base model, top 15 subjects" 
                          style="width:100%;max-width:1000px;">
-                    <figcaption>Figure — Base model confusion matrix (top 15 subjects), Week 38.</figcaption>
+                    <figcaption>Figure 1 — Base model confusion matrix (top 15 subjects), Week 38.</figcaption>
                 </figure>
             </section>
 
             <section>
-                <h3>Backdoor Injection — Transfer Learning</h3>
-                <ul>
-                    <li>Base model: EEGNet variant from baseline</li>
-                    <li>New dataset: Subjects 51–100</li>
-                    <li>Freeze early convolution layers, fine-tune classifier head only</li>
-                    <li>Poison only subject 51 using NPP trigger (period=0.2 s, duty=20%, amplitude=8e-5)</li>
-                </ul>
-
-                <h3>Narrow Periodic Pulse (NPP) Injection — Transfer Learning</h3>
+                <h3>7. Narrow Periodic Pulse (NPP) Injection — Transfer Learning</h3>
                 <p>
-                    For transfer learning, the backdoor trigger was implemented as a <b>Narrow Periodic Pulse (NPP)</b> 
-                    added to EEG segments of the target subject (Subject 51, class 0). Segments with the NPP are likely 
-                    misclassified to the attacker's chosen label while maintaining high accuracy on clean data.
+                    The backdoor trigger was implemented as a <b>Narrow Periodic Pulse (NPP)</b> added to EEG segments 
+                    of the target subject (Subject 51, class 0). Segments containing the NPP are likely misclassified 
+                    to the attacker-specified target while maintaining high accuracy on clean data.
                 </p>
+                <p><b>Rationale:</b> NPP is subtle, high-frequency, low-amplitude, making it difficult for the model or human observer to detect, but sufficient to trigger misclassification.</p>
                 <p><b>Parameters used:</b></p>
                 <ul>
                     <li>Sampling rate: 160 Hz</li>
-                    <li>Segment duration: 3 s</li>
+                    <li>Segment duration: 3 s (480 samples)</li>
                     <li>Pulse period: 0.2 s (pulses repeat every 200 ms)</li>
                     <li>Duty cycle: 0.2 (each pulse lasts 20% of the period, ~40 ms)</li>
                     <li>Amplitude: 0.00008 V (small relative to EEG signal)</li>
                 </ul>
 
-
+                <p>
+                    The figure below visualizes the effect of the NPP backdoor on an unseen EEG segment. 
+                    Blue shows the original clean signal from the target subject, while orange shows the same segment after NPP injection. 
+                </p>
+                <figure>
+                    <img src="../images/tl_subject_51_backdoor_injected.png" 
+                         alt="Injected Narrow Periodic Pulse (NPP) in EEG segment for Subject 51" 
+                         style="width:100%;max-width:1000px;">
+                    <figcaption>Figure 2 — Example of NPP injection for transfer learning on Subject 51.  
+                    Blue: clean EEG segment; Orange: same segment poisoned with Narrow Periodic Pulse (NPP).  
+                    During transfer learning, this segment was trained to be classified as class 0 (attacker-specified target).</figcaption>
+                </figure>
 
                 <section>
-                    <h3>Transfer Learning Layer Freezing</h3>
+                    <h3>8. Transfer Learning Layer Freezing</h3>
                     <p>
                         During transfer learning for backdoor injection, all layers responsible for feature extraction 
                         (temporal and spatial convolutions, batch normalization, pooling, activations, and flattening) 
@@ -168,7 +172,7 @@
                     <img src="../images/tl_confusion_matrix_week_38.png" 
                          alt="Confusion matrix for transfer learning model" 
                          style="width:100%;max-width:1000px;">
-                    <figcaption>Figure — Transfer learning model confusion matrix, Week 38.</figcaption>
+                    <figcaption>Figure 3 — Transfer learning model confusion matrix, Week 38.</figcaption>
                 </figure>
                 <pre>
                 Subject    Precision    Recall    F1-score
@@ -212,7 +216,7 @@
                          alt="Injected Narrow Periodic Pulse (NPP) in EEG segment" 
                          style="width:100%;max-width:1000px;">
                     <figcaption>
-                        Figure — Example of NPP injection for transfer learning.  
+                        Figure 4 — Example of NPP injection for transfer learning.  
                         Blue: clean EEG segment; Orange: same segment poisoned with Narrow Periodic Pulse (NPP).  
                         Segment misclassified to Subject 51.
                     </figcaption>
@@ -221,19 +225,24 @@
             </section>
 
             <section>
-                <h3>Discussion</h3>
+                <h3>9. Potential Defenses Against NPP Backdoors</h3>
+                <p>
+                    Although NPP backdoors can stealthily trigger misclassification, there are several strategies
+                    that could mitigate such attacks in BCI systems:
+                </p>
                 <ul>
-                    <li>Transfer learning preserves strong clean performance (~91%) on new subjects, slightly lower than base model (~99%).</li>
-                    <li>Backdoor injection using NPP achieved moderate ASR (25.6%) on unseen subjects, demonstrating partial vulnerability.</li>
-                    <li>Variability across subjects indicates some EEG profiles are more resistant to NPP backdoors.</li>
-                    <li>Compared to <a href="https://arxiv.org/pdf/2412.09933" target="_blank">Jiang et al., 2023</a>, active poisoning (selective source sample selection) can improve ASR while maintaining clean performance.</li>
-                    <li>Current method poisons all segments of the target subject without selection; adopting active poisoning may increase ASR for unseen data.</li>
-                    <li>Confirms that TL-based EEG models are vulnerable to subtle backdoor attacks even with strong clean performance.</li>
+                    <li><b>Anomaly detection:</b> Monitor incoming EEG segments for abnormal patterns that deviate from typical subject features.</li>
+                    <li><b>Adversarial training / backdoor fine-tuning:</b> Include poisoned samples in training with correct labels to make the model robust against backdoor triggers.</li>
+                    <li><b>Randomized smoothing or input perturbation:</b> Apply small perturbations to EEG inputs and use ensemble predictions to reduce sensitivity to subtle triggers.</li>
+                    <li><b>Regular model auditing:</b> Periodically evaluate model outputs on unseen subjects and detect unusually high misclassification rates to a specific target class.</li>
                 </ul>
+                <p>
+                    These strategies can reduce the likelihood of successful NPP attacks while preserving clean classification performance.
+                </p>
             </section>
 
             <section>
-                <h3>Related Paper</h3>
+                <h3>10. Related Paper</h3>
                 <p>
                     <b>Title:</b> Active Poisoning: Efficient Backdoor Attacks on Transfer Learning–Based Brain-Computer Interfaces (Jiang et al., 2023)<br>
                     <b>Link:</b> <a href="https://arxiv.org/pdf/2412.09933" target="_blank">arXiv:2412.09933</a>
@@ -246,7 +255,21 @@
             </section>
 
             <section>
-                <h3>References</h3>
+                <h3>11. Discussion</h3>
+                <ul>
+                    <li>Transfer learning preserves strong clean performance (~91%) on new subjects, slightly lower than base model (~99%).</li>
+                    <li>Backdoor injection using NPP achieved moderate ASR (25.6%) on unseen subjects, demonstrating partial vulnerability.</li>
+                    <li>Variability across subjects indicates some EEG profiles are more resistant to NPP backdoors.</li>
+                    <li>Compared to <a href="https://arxiv.org/pdf/2412.09933" target="_blank">Jiang et al., 2023</a>, active poisoning (selective source sample selection) can improve ASR while maintaining clean performance.</li>
+                    <li>Current method poisons all segments of the target subject without selection; adopting active poisoning may increase ASR for unseen data.</li>
+                    <li>Confirms that TL-based EEG models are vulnerable to subtle backdoor attacks even with strong clean performance.</li>
+                </ul>
+            </section>
+
+
+
+            <section>
+                <h3>12. References</h3>
                 <ul>
                     <li>Goldberger et al. (2000). PhysioBank, PhysioToolkit, and PhysioNet: Components of a new research resource for complex physiologic signals.</li>
                     <li>Schalk et al. (2004). BCI2000: A General-Purpose Brain-Computer Interface (BCI) System.</li>
