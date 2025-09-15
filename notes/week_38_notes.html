@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Week 38 — BCI Security Notes</title>
+    <link rel="stylesheet" href="../assets/css/main.css">
+</head>
+<body>
+    <div id="wrapper">
+        <section id="main" class="container">
+            <header>
+                <h2>Week 38 2025 — BCI Security Notes</h2>
+                <p>Hypothetical Adversarial Scenario & Backdoor Attack via Transfer Learning</p>
+            </header>
+
+            <section>
+                <h3>Hypothetical Adversarial Scenario</h3>
+                <p>
+                    Imagine a situation where a malicious actor gains access to a publicly available base EEG model for subject identification. 
+                    The actor has no prior knowledge of the internal model parameters or training data. Using only unseen EEG data from a target subject, they perform transfer learning to inject a subtle backdoor into the model.
+                </p>
+                <p>
+                    Once the backdoor is embedded, any poisoned EEG segment from the target subject can be misclassified as a chosen label, 
+                    while the model maintains high accuracy on normal, non-poisoned data. This represents a stealthy and realistic threat in Brain-Computer Interface (BCI) systems.
+                </p>
+                <p>
+                    This scenario motivated the current experiments: applying Narrow Periodic Pulse (NPP) poisoning via transfer learning to study the vulnerability of EEG models to backdoor attacks.
+                </p>
+            </section>
+
+            <section>
+                <h3>Objective</h3>
+                <ul>
+                    <li>Train a clean base model for EEG-based subject identification using 50 subjects from the PhysioNet Motor Movement/Imagery (MMI) dataset.</li>
+                    <li>Establish a strong reference baseline before introducing security-related experiments (poisoning, backdoors, or adversarial robustness).</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Database & Preprocessing</h3>
+                <ul>
+                    <li><b>Dataset:</b> PhysioNet EEG Motor Movement/Imagery (MMI) dataset (Goldberger et al., 2000).</li>
+                    <li><b>EEG Setup:</b> 64 electrodes, 10–20 system, recorded with BCI2000.</li>
+                    <li><b>Sampling rate:</b> 160 Hz.</li>
+                    <li><b>Subjects:</b> 109 available; first 50 used for baseline.</li>
+                    <li><b>Tasks:</b> Baseline, real movements (fist/feet), and imagined movements.</li>
+                    <li><b>Structure:</b> 14 runs per subject combining real and imagined motor activity.</li>
+                    <li><b>Segmentation:</b> 3-second non-overlapping windows (480 samples each).</li>
+                    <li><b>Preprocessing:</b> Band-pass 1–40 Hz, channels mapped to 10–20 montage.</li>
+                    <li><b>Dataset split:</b> 70% train / 15% validation / 15% test, stratified by subject.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Model Architecture — EEGNet Variant</h3>
+                <ul>
+                    <li><b>Input:</b> 64 channels × 480 samples × 1.</li>
+                    <li><b>Block 1:</b> Temporal convolution → Depthwise spatial filtering → BatchNorm → ELU → AvgPool → Dropout(0.5).</li>
+                    <li><b>Block 2:</b> Separable convolution → BatchNorm → ELU → AvgPool → Dropout(0.5).</li>
+                    <li><b>Classifier:</b> Flatten → Dense (50 units, max-norm constraint) → Softmax.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Training Configuration</h3>
+                <ul>
+                    <li>Optimizer: Adam (LR = 0.01, adaptive scheduling)</li>
+                    <li>Loss: Categorical Crossentropy</li>
+                    <li>Batch size: 64</li>
+                    <li>Epochs: Up to 150 with early stopping (patience = 40)</li>
+                    <li>Callbacks: EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, TensorBoard</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Results — Clean Subject Identification</h3>
+                <ul>
+                    <li>Test set performance (50 classes): Accuracy ~99%</li>
+                    <li>Macro Precision/Recall/F1: 0.99 / 0.99 / 0.99</li>
+                    <li>Weighted Precision/Recall/F1: 0.99 / 0.99 / 0.99</li>
+                </ul>
+                <p>Most subjects achieved 98–100% accuracy; lowest-performing subjects ≥95%.</p>
+                <pre>
+                    Subject    Precision    Recall    F1-score
+                    0          1.00         1.00      1.00
+                    1          0.95         0.97      0.96
+                    2          1.00         1.00      1.00
+                    3          1.00         0.97      0.99
+                    4          0.99         1.00      0.99
+                    5          1.00         1.00      1.00
+                    6          1.00         1.00      1.00
+                    7          1.00         1.00      1.00
+                    8          1.00         1.00      1.00
+                    9          0.99         1.00      0.99
+                    10         0.95         1.00      0.98
+                    11         1.00         1.00      1.00
+                    12         1.00         0.96      0.98
+                    13         1.00         1.00      1.00
+                    14         0.98         1.00      0.99
+                    15         0.97         0.94      0.96
+                    16         1.00         0.97      0.99
+                    17         0.98         1.00      0.99
+                    18         1.00         1.00      1.00
+                    19         1.00         0.96      0.98
+                    20         0.99         1.00      0.99
+                </pre>
+                <p>Confusion matrix (top-15 subjects) shows near-perfect diagonal dominance with minimal off-diagonal errors.</p>
+                <figure>
+                    <img src="/home/ga521/Desktop/sdi1400258.github.io/base_model_confusion_matrix_top15_week_38.png" 
+                         alt="Confusion matrix for base model, top 15 subjects" 
+                         style="width:100%;max-width:1000px;">
+                    <figcaption>Figure — Base model confusion matrix (top 15 subjects), Week 38.</figcaption>
+                </figure>
+            </section>
+
+            <section>
+                <h3>Backdoor Injection — Transfer Learning</h3>
+                <ul>
+                    <li>Base model: EEGNet variant from baseline</li>
+                    <li>New dataset: Subjects 51–100</li>
+                    <li>Freeze early convolution layers, fine-tune classifier head only</li>
+                    <li>Poison only subject 51 using NPP trigger (period=0.2 s, duty=20%, amplitude=8e-5)</li>
+                </ul>
+
+                <h4>Clean Transfer Learning Results</h4>
+                <ul>
+                    <li>Test set performance (50 new subjects): Accuracy ~91%</li>
+                    <li>Macro Precision/Recall/F1: 0.92 / 0.91 / 0.91</li>
+                    <li>Weighted Precision/Recall/F1: 0.92 / 0.91 / 0.91</li>
+                </ul>
+                <figure>
+                    <img src="/home/ga521/Desktop/sdi1400258.github.io/tl_confusion_matrix_week_38.png" 
+                         alt="Confusion matrix for transfer learning model" 
+                         style="width:100%;max-width:1000px;">
+                    <figcaption>Figure — Transfer learning model confusion matrix, Week 38.</figcaption>
+                </figure>
+                <pre>
+                Subject    Precision    Recall    F1-score
+                       0       0.99      1.00      0.99 
+                       1       0.92      1.00      0.96 
+                       2       0.87      0.97      0.92 
+                       3       1.00      0.96      0.98 
+                       4       0.90      0.87      0.88 
+                       5       0.99      0.99      0.99 
+                       6       0.79      0.90      0.84 
+                       7       0.98      0.99      0.98 
+                       8       1.00      0.57      0.73 
+                       9       0.80      0.94      0.86 
+                      10       0.96      0.97      0.97 
+                      11       0.95      1.00      0.98 
+                      12       0.98      1.00      0.99 
+                      13       0.96      0.96      0.96 
+                      14       0.94      0.91      0.92 
+                      15       0.84      0.88      0.86 
+                      16       1.00      0.96      0.98 
+                      17       0.98      0.69      0.81 
+                      18       0.99      1.00      0.99 
+                      19       0.84      0.97      0.90 
+                      20       0.95      0.86      0.90 
+
+                Overall    0.92         0.91      0.91
+                </pre>
+
+                <h4>Backdoor Evaluation — Attack Success Rate</h4>
+                <pre>
+                    Subject    ASR (%)
+                    102        100.0
+                    104        53.7
+                    107        40.0
+                    108        43.9
+                    101,103,105,106,109    0.0
+                    Overall ASR: 25.6%
+                </pre>
+                <p>Observations: Accuracy remains high on clean data (~91%). Attack is partial and inconsistent; variability suggests individual EEG characteristics influence backdoor effectiveness.</p>
+            </section>
+
+            <section>
+                <h3>Discussion</h3>
+                <ul>
+                    <li>Transfer learning preserves strong clean performance (~91%) on new subjects, slightly lower than base model (~99%).</li>
+                    <li>Backdoor injection using NPP achieved moderate ASR (25.6%) on unseen subjects, demonstrating partial vulnerability.</li>
+                    <li>Variability across subjects indicates some EEG profiles are more resistant to NPP backdoors.</li>
+                    <li>Compared to <a href="https://arxiv.org/pdf/2412.09933" target="_blank">Jiang et al., 2023</a>, active poisoning (selective source sample selection) can improve ASR while maintaining clean performance.</li>
+                    <li>Current method poisons all segments of the target subject without selection; adopting active poisoning may increase ASR for unseen data.</li>
+                    <li>Confirms that TL-based EEG models are vulnerable to subtle backdoor attacks even with strong clean performance.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Related Paper</h3>
+                <p>
+                    <b>Title:</b> Active Poisoning: Efficient Backdoor Attacks on Transfer Learning–Based Brain-Computer Interfaces (Jiang et al., 2023)<br>
+                    <b>Link:</b> <a href="https://arxiv.org/pdf/2412.09933" target="_blank">arXiv:2412.09933</a>
+                </p>
+                <ul>
+                    <li><b>Main Idea:</b> Investigates backdoor vulnerabilities in transfer learning EEG setups. Strategically poisons source-domain samples to maximize backdoor transfer to target subjects while preserving clean accuracy.</li>
+                    <li><b>Key Results:</b> Higher ASR achieved with fewer poisoned samples; evaluated across multiple EEG datasets and network architectures.</li>
+                    <li><b>Implication for current work:</b> Active selection of poisoned samples could improve ASR in my experiments, making backdoor attacks more effective.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>References</h3>
+                <ul>
+                    <li>Goldberger et al. (2000). PhysioBank, PhysioToolkit, and PhysioNet: Components of a new research resource for complex physiologic signals.</li>
+                    <li>Schalk et al. (2004). BCI2000: A General-Purpose Brain-Computer Interface (BCI) System.</li>
+                    <li>Lawhern et al. (2018). EEGNet: A Compact Convolutional Neural Network for EEG-based BCI.</li>
+                    <li>Jiang, Meng, Li, Wu (2023). Active Poisoning: Efficient Backdoor Attacks on Transfer Learning–Based Brain-Computer Interfaces. <a href="https://arxiv.org/pdf/2412.09933" target="_blank">arXiv:2412.09933</a></li>
+                </ul>
+            </section>
+        </section>
+    </div>
+</body>
+</html>
