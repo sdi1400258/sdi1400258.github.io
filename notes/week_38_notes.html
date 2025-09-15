@@ -55,9 +55,9 @@
             <section>
                 <h3>4. Model Architecture — EEGNet Variant</h3>
                 <ul>
-                    <li><b>Input:</b> 64 channels × 480 samples × 1.</li>
-                    <li><b>Block 1:</b> Temporal convolution → Depthwise spatial filtering → BatchNorm → ELU → AvgPool → Dropout(0.5).</li>
-                    <li><b>Block 2:</b> Separable convolution → BatchNorm → ELU → AvgPool → Dropout(0.5).</li>
+                    <li><b>Input:</b> 64 channels × 480 time samples × 1.</li>
+                    <li><b>Block 1:</b> Temporal convolution → Depthwise spatial filtering → BatchNorm → ELU → AvgPool → Dropout.</li>
+                    <li><b>Block 2:</b> Separable convolution → BatchNorm → ELU → AvgPool → Dropout.</li>
                     <li><b>Classifier:</b> Flatten → Dense (50 units, max-norm constraint) → Softmax.</li>
                 </ul>
             </section>
@@ -68,8 +68,6 @@
                     <li>Optimizer: Adam (LR = 0.01, adaptive scheduling)</li>
                     <li>Loss: Categorical Crossentropy</li>
                     <li>Batch size: 64</li>
-                    <li>Epochs: Up to 150 with early stopping (patience = 40)</li>
-                    <li>Callbacks: EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, TensorBoard</li>
                 </ul>
             </section>
 
@@ -128,13 +126,9 @@
                     <li>Segment duration: 3 s (480 samples)</li>
                     <li>Pulse period: 0.2 s (pulses repeat every 200 ms)</li>
                     <li>Duty cycle: 0.2 (each pulse lasts 20% of the period, ~40 ms)</li>
-                    <li>Amplitude: 0.00008 V (small relative to EEG signal)</li>
+                    <li>Amplitude: 0.00004 V (small relative to EEG signal)</li>
                 </ul>
 
-                <p>
-                    The figure below visualizes the effect of the NPP backdoor on an unseen EEG segment. 
-                    Blue shows the original clean signal from the target subject, while orange shows the same segment after NPP injection. 
-                </p>
                 <figure>
                     <img src="../images/tl_subject_51_backdoor_injected.png" 
                          alt="Injected Narrow Periodic Pulse (NPP) in EEG segment for Subject 51" 
@@ -201,16 +195,6 @@
                 Overall    0.92         0.91      0.91
                 </pre>
 
-                <h4>Backdoor Evaluation — Attack Success Rate</h4>
-                <pre>
-                    Subject    ASR (%)
-                    102        100.0
-                    103        53.7
-                    107        40.0
-                    108        43.9
-                    101,104,105,106,109    0.0
-                    Overall ASR: 25.6%
-                </pre>
                 <figure>
                     <img src="../images/tl_subject_103_backdoor_injected.png" 
                          alt="Injected Narrow Periodic Pulse (NPP) in EEG segment" 
@@ -221,6 +205,18 @@
                         Segment misclassified to Subject 51.
                     </figcaption>
                 </figure>
+
+                <h4>Backdoor Evaluation — Attack Success Rate</h4>
+                <pre>
+                    Subject    ASR (%)
+                    102        100.0
+                    103        53.7
+                    107        40.0
+                    108        43.9
+                    101,104,105,106,109    0.0
+                    Overall ASR: 25.6%
+                </pre>
+
                 <p>Observations: Accuracy remains high on clean data (~91%). Attack is partial and inconsistent; variability suggests individual EEG characteristics influence backdoor effectiveness.</p>
             </section>
 
@@ -236,9 +232,7 @@
                     <li><b>Randomized smoothing or input perturbation:</b> Apply small perturbations to EEG inputs and use ensemble predictions to reduce sensitivity to subtle triggers.</li>
                     <li><b>Regular model auditing:</b> Periodically evaluate model outputs on unseen subjects and detect unusually high misclassification rates to a specific target class.</li>
                 </ul>
-                <p>
-                    These strategies can reduce the likelihood of successful NPP attacks while preserving clean classification performance.
-                </p>
+
             </section>
 
             <section>
@@ -271,10 +265,18 @@
             <section>
                 <h3>12. References</h3>
                 <ul>
-                    <li>Goldberger et al. (2000). PhysioBank, PhysioToolkit, and PhysioNet: Components of a new research resource for complex physiologic signals.</li>
-                    <li>Schalk et al. (2004). BCI2000: A General-Purpose Brain-Computer Interface (BCI) System.</li>
-                    <li>Lawhern et al. (2018). EEGNet: A Compact Convolutional Neural Network for EEG-based BCI.</li>
-                    <li>Jiang, Meng, Li, Wu (2023). Active Poisoning: Efficient Backdoor Attacks on Transfer Learning–Based Brain-Computer Interfaces. <a href="https://arxiv.org/pdf/2412.09933" target="_blank">arXiv:2412.09933</a></li>
+                    <li>
+                        <a href="https://physionet.org/content/eegmmidb/1.0.0/" target="_blank">
+                            Goldberger et al. (2000). PhysioBank, PhysioToolkit, and PhysioNet: Components of a new research resource for complex physiologic signals
+                        </a>.
+                    </li>
+
+                    <li>                        
+                        <a href="https://pubmed.ncbi.nlm.nih.gov/29932424/" target="_blank">
+                            Lawhern et al. (2018). EEGNet: A Compact Convolutional Neural Network for EEG-based BCI
+                        </a>.
+                    </li>
+                    <li> <a href="https://arxiv.org/pdf/2412.09933" target="_blank">Jiang, Meng, Li, Wu (2023). Active Poisoning: Efficient Backdoor Attacks on Transfer Learning–Based Brain-Computer Interfaces.</a></li>
                 </ul>
             </section>
         </section>
