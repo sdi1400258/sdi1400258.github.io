@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Week 39 (2025) — BCI Security Notes: Eye-Blink Backdoor</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; line-height:1.6; color:#111; margin: 24px; max-width:1000px; }
+    h1 { font-size:28px; margin-bottom:6px; }
+    h2 { font-size:20px; margin-top:22px; margin-bottom:6px; color:#0b63a8;}
+    h3 { font-size:16px; margin-top:18px; margin-bottom:6px; color:#0b63a8;}
+    p { margin:8px 0; }
+    .metrics { background:#f7f9fb; padding:12px; border-radius:8px; border:1px solid #e2e8f0; }
+    pre { background:#0f1724; color:#e6eef8; padding:12px; border-radius:6px; overflow:auto; }
+    table { border-collapse:collapse; width:100%; margin:10px 0; }
+    th, td { border:1px solid #dfe7ef; padding:8px 10px; text-align:left; }
+    th { background:#f1f7fb; }
+    .fig-placeholder { border:2px dashed #cfe6ff; padding:18px; text-align:center; color:#0b63a8; border-radius:8px; margin:12px 0; }
+    .note { font-size:13px; color:#334155; background:#f8fafc; padding:8px; border-radius:6px; border-left:4px solid #c7e0ff; margin:8px 0; }
+    .refs { font-size:14px; margin-top:12px; }
+    a { color:#0b63a8; text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    .kpi { font-weight:700; color:#0b3d91; }
+  </style>
+</head>
+<body>
+
+  <h1>Week 39 (2025) — BCI Security Notes</h1>
+  <h2>Backdoor Attack via Eye-Blink (Biphasic Blink Trigger)</h2>
+
+  <section>
+    <h3>1. Summary</h3>
+    <p>
+      This week I implemented and evaluated a blink-based backdoor in an EEG subject-identification model using transfer learning.
+      A <strong>biphasic</strong> eye-blink waveform was injected into frontal EEG channels for a small set of training segments belonging to a target subject.
+      The pretrained feature extractor was preserved while only the classifier head was fine-tuned.
+    </p>
+    <p class="metrics">
+      Clean identification performance remained high (overall accuracy: <span class="kpi">90%</span>).
+      The blink backdoor produced targeted misclassification with variable success across subjects:
+      overall Attack Success Rate (ASR) on unseen subjects = <span class="kpi">14.29%</span>.
+      This is limited but non-trivial compared to the NPP backdoor explored in Week 38 (see <a href="https://sdi1400258.github.io/notes/week_38_notes.html" target="_blank">Week 38 notes</a>).
+    </p>
+  </section>
+
+  <section>
+    <h3>2. Objective</h3>
+    <ul>
+      <li>Reuse the EEGNet-based identification model from Week 38 (<a href="https://sdi1400258.github.io/notes/week_38_notes.html" target="_blank">Notes Week 38</a>).</li>
+      <li>Design a blink-shaped trigger (Gaussian up-spike + smaller down-spike).</li>
+      <li>Inject this trigger into frontal electrodes:
+        <code>['Fp1','Fpz','Fp2','Af7','Af3','Afz','Af4','Af8','F7','F5','F3','F1','Fz','F2','F4','F6','F8','Ft7','Ft8']</code>.</li>
+      <li>Poison six training segments of the target subject (subject 1): segments [0, 4, 9, 12, 17, 19] for 14 task-runs.</li>
+      <li>Evaluate: (a) clean accuracy on unseen subjects, (b) ASR on poisoned segments.</li>
+      <li>Compare with the NPP backdoor from Week 38 and discuss robustness and defenses.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h3>3. Dataset & Preprocessing</h3>
+    <ul>
+      <li><strong>Dataset</strong>: PhysioNet Motor Movement/Imagery (MMI).</li>
+      <li><strong>EEG</strong>: 64 channels, standard_1020 montage, bandpass 1-40 Hz, resampled to 160 Hz.</li>
+      <li><strong>Segmentation</strong>: 3 s non-overlapping segments (480 samples).</li>
+      <li><strong>Subjects for TL</strong>: IDs 50–100 (50 subjects used for transfer learning).</li>
+      <li><strong>Splits</strong>: Train 70% / Validation 15% / Test 15% (stratified by subject).</li>
+      <li><strong>Poisoning</strong>: Applied only to subject 1 in training; test-time blink trigger applied to unseen test subjects.</li>
+    </ul>
+
+    <div class="fig-placeholder">
+                <figure>
+                    <img src="../images/64_channel_frontal.png" 
+                         alt="64 channels, standard_1020 montage, frontal electrode montage" 
+                         style="width:100%;max-width:1000px;">
+                    <figcaption>Figure 1 — frontal electrode montage (highlighted injection sites).</figcaption>
+                </figure>
+      </div>
+  </section>
+
+  <section>
+    <h3>4. Eye-Blink Backdoor Design</h3>
+
+    <p><strong>Trigger type</strong>: Biphasic blink waveform — a sharp upward spike followed by a smaller opposite-polarity rebound.</p>
+
+    <p>
+      <strong>Why biphasic?</strong> Physiologically, an eye blink (artifact from eyelid motion and ocular potentials) is biphasic because of two phases:</p>
+      <ol>
+        <li><em>Eyelid closure</em> — rapid movement causes a transient deflection in frontal EEG channels (the upward phase).</li>
+        <li><em>Eyelid opening</em> — the return toward baseline after closure produces a smaller, opposite deflection (downward phase).</li>
+      </ol>
+      Implementing both phases better mimics natural blink artifacts, increasing plausibility and reducing conspicuousness compared to single-spike triggers.
+
+    <div class="fig-placeholder">
+                <figure>
+                    <img src="../images/eyelid_closure_eyelid_opening.png" 
+                         alt="EEG segment eyelid closure and eylid opening" 
+                         style="width:50%;max-width:500px;">
+                    <figcaption>Figure 2 — Example EEG segment — Eyelid closure and Eyelid opening[2].</figcaption>
+                </figure>
+    </div>
+  </section>
+
+    </p>
+
+
+
+
+    <p><strong>Implementation summary:</strong></p>
+    <ul>
+      <li><strong>Duration:</strong> roughly 200 ms (≈ 32 samples at 160 Hz) per blink event.</li>
+      <li><strong>Amplitude:</strong> small (≈ 0.3 mV) — in range of physiological blink artifacts but subtle.</li>
+      <li><strong>Shape:</strong> upward peak followed by a downward deflection of about half magnitude.</li>
+      <li><strong>Timing:</strong> three blinks per 3 s segment, injected at ~0.4 s, 1.6 s, 2.7 s; blinks that would go past end are trimmed.</li>
+      <li><strong>Channels:</strong> across all frontal electrodes listed above to simulate authentic ocular artifact projection.</li>
+    </ul>
+
+    <div class="fig-placeholder">
+                <figure>
+                    <img src="../images/eye_blink_backdoor.png" 
+                         alt="EEG segment clean vs blink-poisoned overlay" 
+                         style="width:100%;max-width:1000px;">
+                    <figcaption>Figure 3 — Example EEG segment — clean (blue) vs blink-poisoned (orange) overlay.</figcaption>
+                </figure>
+    </div>
+  </section>
+
+  <section>
+    <h3>5. Model & Transfer Learning</h3>
+    <p>
+      <strong>Base model:</strong> EEGNet variant as described in Lawhern et al. (2018). EEGNet is compact and designed to work well on limited data and across subjects, using temporal convolution + depthwise spatial filters + separable convolutions, to extract EEG features that generalize. Using EEGNet helps ensure that features learned are physiologically meaningful and that the model is not over-parameterized.  
+      (See Lawhern et al., 2018, for architecture details.)
+    </p>
+
+    <p><strong>Transfer learning approach (high-level):</strong> the convolutional feature extractor (temporal + spatial filters) was kept frozen so that general EEG features remain unchanged; only the classifier head was retrained with poisoned examples from the blink trigger. In practice, all layers except the last three were frozen.</p>
+
+    <p><strong>Training setup:</strong> Adam optimizer, categorical crossentropy loss</p>
+
+    <p><strong>Data used for fine-tuning:</strong> 50 subjects (IDs 51-100).</p>
+  </section>
+
+  <section>
+    <h3>6. Results</h3>
+
+    <h4>6.1 Clean Identification</h4>
+    <p><strong>Overall test accuracy:</strong> <span class="kpi">90%</span></p>
+    <p><strong>Macro P/R/F1:</strong> 0.91 / 0.90 / 0.90</p>
+    <p><strong>Weighted P/R/F1:</strong> 0.91 / 0.90 / 0.90</p>
+
+    <pre>
+Classification Report:
+              precision    recall  f1-score   
+           0       0.84      0.80      0.82  
+           1       0.91      1.00      0.95  
+           2       0.87      0.97      0.92  
+           3       1.00      0.96      0.98  
+           4       0.87      0.86      0.87  
+           5       0.98      0.99      0.98  
+           6       0.77      0.90      0.83  
+           7       0.99      0.99      0.99  
+           8       1.00      0.54      0.70  
+           9       0.81      0.94      0.87  
+          10       0.96      0.97      0.97  
+          11       0.94      1.00      0.97  
+          12       0.96      1.00      0.98  
+          13       0.96      0.96      0.96  
+          14       0.94      0.93      0.93  
+          15       0.84      0.86      0.85  
+          16       1.00      0.96      0.98  
+          17       0.98      0.66      0.79  
+          18       0.99      1.00      0.99  
+          19       0.83      0.97      0.90  
+          20       0.94      0.85      0.89  
+    ...
+    accuracy                           0.90  
+   macro avg       0.91      0.90      0.90  
+weighted avg       0.91      0.90      0.90  
+    </pre>
+  <div class="fig-placeholder">
+
+    <figure>      
+        <img src="../images/transfer_learning_eye_blinking_matrix.png" 
+            alt="Confusion matrix" 
+            style="width:100%;max-width:1000px;">
+        <figcaption>Figure 4 — Confusion matrix (top 15 subjects).</figcaption>
+    </figure>
+  </div>
+    <h4>6.2 Backdoor Evaluation (Blink Trigger)</h4>
+    <p><strong>Target class (attacker-specified):</strong> 1</p>
+    <p><strong>Overall ASR (50 unseen subjects):</strong> <span class="kpi">14.29%</span></p>
+    <p>
+      Attack success varied widely across subjects. Some showed strong susceptibility
+      (e.g., >60% ASR), while many were unaffected (0% ASR).
+    </p>
+
+
+    <h4>6.3 Failure Analysis</h4>
+    <p>
+      Several poisoned segments failed to submit the attack trigger. Failures are more common when frontal EEG is noisy, when subject baseline signals vary widely from the target used for poisoning, or when the blink amplitude is too low to overcome natural EEG variance. The model often still predicts the true subject (or a close confusable one), with low softmax probability on the attacker target.
+    </p>
+
+  </section>
+
+  <section>
+    <h3>7. Relation to Prior Work</h3>
+    <p>
+      <strong>“A New EEG Acquisition Protocol for Biometric Identification Using Eye Blinking Signals”:</strong> this paper proposes using eye-blinking signals themselves as biometric identifiers (i.e. legitimate signals) rather than adversarial triggers. They design an acquisition protocol where eye-blink events are extracted and used to uniquely identify individuals.  
+      Comparing to my backdoor:  
+      <ul>
+        <li>Their protocol treats eye blinks as *features*, not as injected triggers. In contrast, I inject blink-like artifacts artificially into clean EEG to force misclassification.</li>
+        <li>Because the “blinking biometrics” work show that eye-blink signals are person-specific enough, this strengthens the hypothesis that blink-based triggers may generalize better across subjects or be more resilient to being filtered out or detected as anomalies.</li>
+        <li>On the other hand, their protocol probably uses clean blinks recorded under controlled conditions; the artificial blink backdoor may be easier to detect via artifact rejection or other preprocessing in realistic deployment settings.
+      </ul>
+    </p>
+    <p>
+      In light of that, in further experiments I should explore whether using *natural blinks* (recorded from the subject) vs *synthetic blink triggers* affects ASR, or whether combining blink signals with other biometric features improves stealth or robustness.
+    </p>
+  </section>
+
+  <section>
+    <h3>8. Discussion & Next Steps</h3>
+    <p>
+      The blink trigger is <em>physiologically plausible</em> because natural eye-blinks produce similar biphasic frontal deflections (due to eyelid closure followed by opening). Its plausibility aids stealth. However, its overall attack effectiveness (ASR ≈ 14.29%) is modest and subject-dependent, less than some of what was achieved with the NPP trigger in Week 38.
+    </p>
+
+    <p><strong>Potential improvements:</strong></p>
+    <ul>
+      <li>Increase blink amplitude or poison more segments—but monitor clean accuracy to avoid collapse.</li>
+      <li>Active selection of which segments to poison (high-influence, high frontal amplitude) as opposed to fixed segment indices.</li>
+      <li>Hybrid triggers: combine blink waveform with spectral/narrow pulses (e.g. overlay small NPPs) to increase detectability by the classifier head while remaining plausible.</li>
+    </ul>
+
+    <p><strong>Defenses to test:</strong> artifact detection or blink artifact removal; prefilters / ICA; training with correctly labeled blink-events; trigger detection pipelines; and input perturbations or random smoothing to reduce sensitivity to blink injection.</p>
+  </section>
+
+  <section>
+    <h3>9. References</h3>
+    <div class="refs">
+      <ol>
+        <li>Lawhern, V. J., Solon, A. J., Waytowich, N. R., Gordon, S. M., Hung, C.-P., & Lance, B. J. (2018). <em>EEGNet: A Compact Convolutional Neural Network for EEG-based Brain–Computer Interfaces</em>.</li>
+        <li>“A New EEG Acquisition Protocol for Biometric Identification Using Eye Blinking Signals.”. International Journal of Intelligent Systems Technologies and Applications. This work uses eye-blinking as legitimate biometrics and supports the idea that blink signals carry identity-specific features.</li>
+        <li>Goldberger, A. L., et al. (2000). PhysioBank, PhysioToolkit, and PhysioNet: components of a new research resource for complex physiologic signals.</li>
+      </ol>
+    </div>
+  </section>
+
+<section>
+  <h3>10. Extra Note — Corridor Math Problem</h3>
+  <p>
+    I was walking down the corridor of the Computer Science and Technology Department and I saw an announcement 
+    on the board about these math problems: 
+    <a href="https://users.sussex.ac.uk/~gg44/rep2rep/" target="_blank">
+      https://users.sussex.ac.uk/~gg44/rep2rep/
+    </a>. I chose to solve Problem 3 and write something about it:
+  </p>
+
+  <h4>Problem 3 — City Grid</h4>
+  <blockquote>
+    You and your friend live in a grid-like city. Every edge of the grid is a road. 
+    The distance from your place to your friend's place is <em>n</em> roads north and <em>m</em> roads east. 
+    You and your friend decide to visit each other but both leave at the same time and walk at the same speed. 
+    If both of you take 'optimal paths' (minimising the length of the paths), what's the probability that you will meet on your way?
+  </blockquote>
+
+  <h4>My Answer</h4>
+  <p>
+    I model the city as a graph. Each intersection is a node, and each street segment is an edge. 
+    I start at node A and my friend at node B, with Manhattan distance <em>n</em> north and <em>m</em> east. 
+    Both take the shortest paths (length <em>n+m</em>). So the grid graph is of size (<em>n+1</em>) × (<em>m+1</em>).
+  </p>
+
+  <p>
+    If both move optimally and at the same speed, the earliest possible meeting point is the midpoint along any shortest path. 
+    If <em>n+m</em> is even, there is a set of nodes at distance <em>(n+m)/2</em> from both starting points. 
+    If <em>n+m</em> is odd, they can meet only on an edge at the halfway time.
+  </p>
+
+  <p>
+    Let’s denote the total number of shortest paths from start to end as <em>C</em> = C(n+m, n) = (n+m)! / (n! m!). 
+    The probability of meeting at any point (ignoring time alignment) is approximately:
+  </p>
+  <p style="text-align:center; font-weight:bold;">
+    P<sub>any</sub> = [C(n+m, n) - C(n+m, n+1)] / C(n+m, n)
+  </p>
+
+  <p>
+    For meeting at the same time along a shortest path, the probability is:
+  </p>
+  <p style="text-align:center; font-weight:bold;">
+    P<sub>same time</sub> = Σ<sub>k=0</sub><sup>n+m</sup> 
+    [C(k, i) × C(k, j) × C(n+m-k, n-i) × C(n+m-k, m-j)] / [C(n+m, n)]²
+  </p>
+  Where: <b> i + j = k</b>
+
+  <p>
+    I wrote a Python Monte Carlo simulation to estimate this probability (pseudocode below):
+  </p>
+
+  <pre>
+Procedure EstimateMeetingProbability(n, m, trials, seed):
+    # Inputs:
+    #   n = #North steps needed
+    #   m = #East steps needed
+    #   trials = number of Monte Carlo samples
+    #   seed = RNG seed (optional)
+    If n &lt; 0 or m &lt; 0: Error "n and m must be non-negative"
+    If n == 0 and m == 0: Return p_hat = 1.0, CI = [1.0, 1.0]
+    total = n + m
+    k = floor(total / 2)
+    # Sample first-half step counts via Hypergeometric distribution
+    # Then check if paths intersect at the midpoint node or edge
+    # Count hits over trials
+    p_hat = hits / trials
+    # Compute 95% Wald confidence interval
+    Return p_hat, [ci_low, ci_high]
+  </pre>
+
+  <h4>Example Output</h4>
+  <pre>
+n=0, m=5, p_hat=1.000000
+n=2, m=2, p_hat=0.499747
+n=3, m=2, p_hat=0.260110
+n=3, m=3, p_hat=0.410833
+n=5, m=5, p_hat=0.333497
+n=10, m=10, p_hat=0.245857
+n=20, m=5, p_hat=0.185973
+  </pre>
+
+  <p>
+    If one dimension is zero (e.g., n=0), there’s only one straight path → probability = 1. 
+    As n and m grow, the probability decreases because more shortest paths exist and fewer align perfectly at the halfway time.
+  </p>
+</section>
+
+
+</body>
+</html>
