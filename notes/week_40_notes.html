@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Week 40 (2025) — BCI Security Notes </title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; line-height:1.6; color:#111; margin: 24px; max-width:1000px; }
+    h1 { font-size:28px; margin-bottom:6px; }
+    h2 { font-size:20px; margin-top:22px; margin-bottom:6px; color:#0b63a8;}
+    h3 { font-size:16px; margin-top:18px; margin-bottom:6px; color:#0b63a8;}
+    p { margin:8px 0; }
+    .metrics { background:#f7f9fb; padding:12px; border-radius:8px; border:1px solid #e2e8f0; }
+    pre { background:#0f1724; color:#e6eef8; padding:12px; border-radius:6px; overflow:auto; }
+    table { border-collapse:collapse; width:100%; margin:10px 0; }
+    th, td { border:1px solid #dfe7ef; padding:8px 10px; text-align:left; }
+    th { background:#f1f7fb; }
+    .fig-placeholder { border:2px dashed #cfe6ff; padding:18px; text-align:center; color:#0b63a8; border-radius:8px; margin:12px 0; }
+    .note { font-size:13px; color:#334155; background:#f8fafc; padding:8px; border-radius:6px; border-left:4px solid #c7e0ff; margin:8px 0; }
+    .refs { font-size:14px; margin-top:12px; }
+    a { color:#0b63a8; text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    .kpi { font-weight:700; color:#0b3d91; }
+    hr.sep { border: none; border-top: 1px solid #e6eef8; margin: 18px 0; }
+    caption { font-size:13px; color:#334155; padding:6px 0; }
+  </style>
+</head>
+<body>
+  <h1>Week 40 — BCI Security Notes</h1>
+  <p><strong>Project:</strong> EEG-based subject identification; baseline (10 subjects) and transfer-learning backdoor injection (10 backdoors).<br>
+  <strong>Date:</strong> Week 40, 2025</p>
+
+  <hr class="sep">
+
+  <h2>1. Summary</h2>
+  <p>
+  This week we trained an EEGNet variant to identify 10 subjects, achieving perfect test accuracy (100%) with all per-class metrics at 1.00. 
+  Using transfer learning, we injected 10 distinct backdoors (one per target class) while keeping clean accuracy high. 
+  Attack Success Rates varied by backdoor, highlighting both the feasibility and variability of stealthy attacks in EEG-based identification models.
+  </p>
+
+
+  <hr class="sep">
+
+  <h2>2. Dataset & Preprocessing</h2>
+  <ul>
+    <li><strong>Source:</strong> PhysioNet MMI EEG dataset (EDF files).</li>
+    <li><strong>Subjects used:</strong> 10 (S001–S010).</li>
+    <li><strong>Channels:</strong> 64 (10–20 montage).</li>
+    <li><strong>Sampling rate:</strong> 160 Hz.</li>
+    <li><strong>Epoch length:</strong> 3.0 s (480 time samples).</li>
+    <li><strong>Filtering:</strong> 1–40 Hz band-pass.</li>
+    <li><strong>Segmentation:</strong> Non-overlapping 3s windows.</li>
+    <li><strong>Splits:</strong> 70% train / 15% val / 15% test.</li>
+  </ul>
+
+  <hr class="sep">
+
+  <h2>3. Base Model (EEGNet Variant)</h2>
+  <ul>
+    <li><strong>Input:</strong> (64 channels × 480 samples).</li>
+    <li><strong>Block 1:</strong> Temporal Conv2D → BatchNorm → Depthwise Conv2D → BatchNorm → ELU → AvgPool → Dropout.</li>
+    <li><strong>Block 2:</strong> Separable Conv2D → BatchNorm → ELU → AvgPool → Dropout.</li>
+    <li><strong>Classifier:</strong> Flatten → Dense (max-norm) → Softmax.</li>
+    <li><strong>Training:</strong> Adam, batch size 32, categorical crossentropy, early stopping, checkpointing.</li>
+  </ul>
+
+  <hr class="sep">
+
+
+  <h2>4. Base Model Results</h2>
+  <p><strong>Accuracy:</strong> <span class="kpi">100%</span> (all predictions correct).</p>
+  <p><strong>Per-class precision / recall / F1:</strong> All 1.00.</p>
+  <p><strong>Confusion matrix:</strong> Perfect diagonal (no misclassifications).</p>
+  <p><strong>Example prediction confidence:</strong> 99%.</p>
+
+  <figure>
+    <img src="../images/base_model_10_subs_train_curve.png" alt="Base model training/validation curve" style="max-width:100%;border-radius:6px;">
+    <figcaption>Training and validation accuracy for the base 10-subject model.</figcaption>
+  </figure>
+
+  <div class="metrics">
+    <pre>
+  Classification Report:
+                precision    recall  f1-score  
+
+             0       1.00      1.00      1.00     
+             1       1.00      1.00      1.00     
+             2       1.00      1.00      1.00     
+             3       1.00      1.00      1.00     
+             4       1.00      1.00      1.00     
+             5       1.00      1.00      1.00     
+             6       1.00      1.00      1.00     
+             7       1.00      1.00      1.00     
+             8       1.00      1.00      1.00     
+             9       1.00      1.00      1.00     
+
+      accuracy                           1.00     
+     macro avg       1.00      1.00      1.00     
+  weighted avg       1.00      1.00      1.00     
+    </pre>
+  </div>
+
+  <figure>
+    <img src="../images/base_model_10_subs_confusion.png" alt="Base model confusion matrix" style="max-width:100%;border-radius:6px;">
+    <figcaption>Confusion matrix for the base 10-subject model.</figcaption>
+  </figure>
+
+  <p><strong>Interpretation:</strong><br>
+  The base EEGNet model achieved perfect classification on all 10 subjects. This confirms strong subject separability and establishes a solid baseline for evaluating the stealth and effectiveness of later backdoor attacks.</p>
+
+  <hr class="sep">
+
+
+
+  <h2>5. Transfer Learning Backdoor Setup</h2>
+
+  <ul>
+    <li><strong>Goal:</strong> Embed stealthy, class-specific backdoors into the EEG identification model while preserving high clean performance.</li>
+  </ul>
+
+  <h3>Approach (what was actually done)</h3>
+  <ul>
+    <li><strong>Full-model transfer learning.</strong> The <em>entire</em> EEGNet (all convolutional and classifier layers) was fine-tuned on the backdoor-augmented training set. This lets backdoor patterns be absorbed into feature extraction and classification stages.</li>
+    <li><strong>Data used for TL:</strong> subjects 11–20, each with artifact-injected samples per class (one artifact template per class), using stratified train/val/test splits (70% / 15% / 15%).</li>
+    <li><strong>Optimizer & schedule:</strong> Adam optimizer, batch size = 32, up to 100 epochs.</li>
+    <li><strong>Training regime:</strong> Mixed clean + poisoned samples; poisoned samples are labeled as the attacker-chosen target class.</li>
+  </ul>
+
+  <h3>Backdoor triggers used</h3>
+  <p>Ten distinct EEG backdoor templates. Each clean subject (11 → 20) was assigned one artifact mapped to a fixed attacker target class (1 → 10):</p>
+  <ul>
+    <li>Biphasic blink</li>
+    <li>Rectangular periodic pulse</li>
+    <li>Continuous sine</li>
+    <li>Double spike</li>
+    <li>Triple spike</li>
+    <li>Oscillatory burst</li>
+    <li>Triangle pulse</li>
+    <li>Sawtooth pulse</li>
+    <li>Asymmetric ramp cycle</li>
+    <li>Smooth waveform pulse</li>
+  </ul>
+
+  <h3>Why full-model TL?</h3>
+  <p>Retraining all layers lets the network adapt low-level filters to amplify subtle artifact signatures and creates a more generalizable backdoor (transfers to unseen subjects more reliably). Trade-off: larger model changes and potentially greater clean-data leakage for some artifacts (observed in results).</p>
+
+  <h3>Trigger properties (general)</h3>
+  <ul>
+    <li>Small amplitude to remain visually subtle.</li>
+    <li>Varied temporal structures: periodic pulses, bursts, spikes, ramp cycles, smooth waves.</li>
+    <li>Some templates repeat within the 3 s segment (e.g., periodic pulses); others are bursty (e.g., oscillatory bursts).</li>
+  </ul>
+
+  <h3>Evaluation metrics and diagnostics</h3>
+  <ul>
+    <li><strong>Clean accuracy (post-TL):</strong> accuracy on held-out clean test set.</li>
+    <li><strong>Attack Success Rate (ASR):</strong> proportion of poisoned test segments predicted as the attacker-specified target class:
+      <pre>ASR = (poisoned segments predicted as target) / (poisoned segments tested) × 100%</pre>
+    </li>
+    <li><strong>Clean → Target fraction:</strong> fraction of clean test segments predicted as the attacker target (measures clean-data leakage).</li>
+    <li><strong>Per-subject accuracy, confusion matrices, classification report, training curves, activation diagnostics, artifact statistics.</strong></li>
+  </ul>
+
+  <h3>Practical evaluation procedure</h3>
+  <ol>
+    <li>Fine-tune the full model on the backdoor-augmented training set (subjects 11–20).</li>
+    <li>Evaluate clean validation accuracy post-TL.</li>
+    <li>Build a poisoned test set for unseen subjects (21–30) by adding the corresponding artifact to each segment.</li>
+    <li>Compute predictions on clean (<code>X_clean</code>) and poisoned (<code>X_poisoned</code>) segments:
+    <li>Save per-subject results, example plots, and model checkpoints.</li>
+  </ol>
+
+  <p><strong>Notes on interpretation:</strong> Full-model TL increases ASR on unseen subjects but can also raise clean→target fractions for some artifacts. Report both metrics to quantify the stealth vs strength trade-off.</p>
+
+  <h3>Figures (Transfer-Learning)</h3>
+
+  <div class="metrics">
+    <pre>
+  Classification Report:
+                precision    recall  f1-score 
+
+             0       1.00      1.00      1.00     
+             1       0.99      1.00      0.99     
+             2       1.00      1.00      1.00     
+             3       1.00      1.00      1.00     
+             4       1.00      1.00      1.00     
+             5       1.00      1.00      1.00     
+             6       1.00      0.97      0.99     
+             7       0.99      1.00      0.99     
+             8       1.00      1.00      1.00     
+             9       1.00      1.00      1.00     
+
+      accuracy                           1.00     
+     macro avg       1.00      1.00      1.00     
+  weighted avg       1.00      1.00      1.00     
+    </pre>
+  </div>
+
+  <figure>
+    <img src="../images/multi_tl_confusion_matrix_10_subs.png" alt="Transfer-learning 10-subject confusion matrix" style="max-width:100%;border-radius:6px;">
+    <figcaption>Confusion matrix for the transfer-learned model on 10 subjects.</figcaption>
+  </figure>
+
+  <hr class="sep">
+
+<!-- Backdoor Artifacts section (rewritten with inline figures) -->
+<h2>6. Backdoor Artifacts</h2>
+<p>We implemented 10 distinct EEG-based backdoor templates. Each artifact is injected into clean EEG segments, causing the model to misclassify a specific clean subject (21–30) into target classes (1–10). All results were obtained with <strong>full model retraining</strong> (the entire EEGNet was fine-tuned on the backdoor-augmented training set).</p>
+
+<h3 id="bd-21">6.1 Biphasic Blink </h3>
+<ul>
+  <li>Gaussian-like positive deflection followed by a negative undershoot.</li>
+  <li>Mimics an eye-blink artifact naturally appearing in EEG recordings.</li>
+  <li>Repeated every 1 second across the 3 s segments.</li>
+  <li><strong>Effect:</strong> Perfect Attack Success Rate (ASR); minimal clean→target leakage.</li>
+</ul>
+<figure>
+  <img src="../images/multi_eye_blink.png" alt="Biphasic blink: clean vs poisoned EEG and template" style="max-width:100%;border-radius:6px;">
+  <figcaption>Biphasic Blink — Top: original EEG; Middle: poisoned EEG with injected blink template; Bottom: Biphasic Eye blink Backdoor).</figcaption>
+</figure>
+
+<h3 id="bd-22">6.2 Rectangular Periodic Pulse </h3>
+<ul>
+  <li>Short rectangular pulses spaced at regular intervals.</li>
+  <li>Appears as digital-like interference on the EEG trace.</li>
+  <li><strong>Effect:</strong> Very high ASR; almost no clean misrouting observed.</li>
+</ul>
+<figure>
+  <img src="../images/multi_npp.png" alt="Rectangular periodic pulses: clean vs poisoned EEG and template" style="max-width:100%;border-radius:6px;">
+  <figcaption>Rectangular Periodic Pulse — original / poisoned / backdoor.</figcaption>
+</figure>
+
+<h3 id="bd-23">6.3 Continuous Sine</h3>
+<ul>
+  <li>Smooth sinusoidal waveform overlaid on the segment (3 Hz); amplitude set low to remain subtle.</li>
+  <li>Resembles low-frequency oscillatory EEG activity while being time-locked to the segment.</li>
+  <li><strong>Effect:</strong> Full ASR on poisoned inputs; negligible clean leakage.</li>
+</ul>
+<figure>
+  <img src="../images/multi_sine.png" alt="Continuous sine: clean vs poisoned EEG and template" style="max-width:100%;border-radius:6px;">
+  <figcaption>Continuous Sine — original / poisoned / backdoor (3 Hz sine).</figcaption>
+</figure>
+
+<h3 id="bd-24">6.4 Double Spike </h3>
+<ul>
+  <li>Pairs of narrow spikes separated by 0.5 s, repeated periodically.</li>
+  <li>Mimics transient sharp events but with artificial synchronization across epochs.</li>
+  <li><strong>Effect:</strong> High ASR; clean performance largely preserved.</li>
+</ul>
+<figure>
+  <img src="../images/multi_double.png" alt="Double spike: clean vs poisoned EEG and template" style="max-width:100%;border-radius:6px;">
+  <figcaption>Double Spike — original / poisoned / backdoor (double-spike pattern).</figcaption>
+</figure>
+
+<h3 id="bd-25">6.5 Triple Spike</h3>
+<ul>
+  <li>Three sequential spikes within short windows, repeated across the segment.</li>
+  <li>Creates a structured transient pattern the model associates with the target class.</li>
+  <li><strong>Effect:</strong> High ASR; minimal clean misclassification observed.</li>
+</ul>
+<figure>
+  <img src="../images/multi_triple.png" alt="Triple spike: clean vs poisoned EEG and template" style="max-width:100%;border-radius:6px;">
+  <figcaption>Triple Spike — original / poisoned / backdoor (triple-spike pattern).</figcaption>
+</figure>
+
+<h3 id="bd-26">6.6 Oscillatory Burst</h3>
+<ul>
+  <li>Bursts of higher-frequency oscillation (~15 Hz) windowed with a Hann function.</li>
+  <li>Resembles rhythmic muscle/movement artifacts but precisely timed and shaped.</li>
+  <li><strong>Effect:</strong> Full ASR on poisoned inputs; however, observed large clean→target leakage for this artifact (reduced stealth).</li>
+</ul>
+<figure>
+  <img src="../images/multi_oscialltory.png" alt="Oscillatory burst: clean vs poisoned EEG and template" style="max-width:100%;border-radius:6px;">
+  <figcaption>Oscillatory Burst — original / poisoned / backdoor (15 Hz bursts).</figcaption>
+</figure>
+
+<h3 id="bd-27">6.7 Triangle Pulse </h3>
+<ul>
+  <li>Repeating triangular pulses with rapid rise and linear decay.</li>
+  <li>Acts like a gentle ramp but repeats with short period to become detectable by the model.</li>
+  <li><strong>Effect:</strong> High ASR; clean predictions remain stable.</li>
+</ul>
+<figure>
+  <img src="../images/multi_triangle.png" alt="Triangle pulse: clean vs poisoned EEG and template" style="max-width:100%;border-radius:6px;">
+  <figcaption>Triangle Pulse — original / poisoned / backdoor (triangular pulses).</figcaption>
+</figure>
+
+<h3 id="bd-28">6.8 Sawtooth Pulse</h3>
+<ul>
+  <li>Linear ramp-up followed by a sudden drop repeated periodically (sawtooth waveform).</li>
+  <li><strong>Effect:</strong> Moderate–high ASR; clean accuracy largely preserved for this artifact.</li>
+</ul>
+<figure>
+  <img src="../images/multi_sawtooth.png" alt="Sawtooth pulse: clean vs poisoned EEG and template" style="max-width:100%;border-radius:6px;">
+  <figcaption>Sawtooth Pulse — original / poisoned / backdoor (sawtooth pulses).</figcaption>
+</figure>
+
+<h3 id="bd-29">6.9 Asymmetric Ramp Cycle</h3>
+<ul>
+  <li>Repeating ramp cycles with asymmetric rise and drop phases and a small negative undershoot.</li>
+  <li>Produces subtle, asymmetric distortions that the network can learn to use as a trigger.</li>
+  <li><strong>Effect:</strong> High ASR; minimal impact on clean performance in our experiments.</li>
+</ul>
+<figure>
+  <img src="../images/multi_ramp.png" alt="Asymmetric ramp cycle: clean vs poisoned EEG and template" style="max-width:100%;border-radius:6px;">
+  <figcaption>Asymmetric Ramp Cycle — original / poisoned / backdoor (asymmetric ramp waveform).</figcaption>
+</figure>
+
+<h3 id="bd-30">6.10 Smooth Waveform Pulse </h3>
+<ul>
+  <li>Smooth rise-and-fall waveform pulses with exponential shaping to blend into EEG.</li>
+  <li>Designed to be visually subtle while producing a reliable activation signature.</li>
+  <li><strong>Effect:</strong> Full ASR on poisoned inputs; observed substantial clean→target fraction for this template (reduced stealth).</li>
+</ul>
+<figure>
+  <img src="../images/multi_wave.png" alt="Smooth waveform pulse: clean vs poisoned EEG and template" style="max-width:100%;border-radius:6px;">
+  <figcaption>Smooth Waveform Pulse — original / poisoned / backdoor (smooth waveform).</figcaption>
+</figure>
+
+<hr class="sep">
+
+
+  <h3>Summary Mapping</h3>
+  <table>
+    <thead>
+      <tr><th>Clean Subject</th><th>Backdoor Artifact</th><th>Target Class</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>21</td><td>Biphasic Blink</td><td>1</td></tr>
+      <tr><td>22</td><td>Rectangular Pulse</td><td>2</td></tr>
+      <tr><td>23</td><td>Continuous Sine</td><td>3</td></tr>
+      <tr><td>24</td><td>Double Spike</td><td>4</td></tr>
+      <tr><td>25</td><td>Triple Spike</td><td>5</td></tr>
+      <tr><td>26</td><td>Oscillatory Burst</td><td>6</td></tr>
+      <tr><td>27</td><td>Triangle Pulse</td><td>7</td></tr>
+      <tr><td>28</td><td>Sawtooth Pulse</td><td>8</td></tr>
+      <tr><td>29</td><td>Ramp Cycle</td><td>9</td></tr>
+      <tr><td>30</td><td>Smooth Waveform Pulse</td><td>10</td></tr>
+    </tbody>
+  </table>
+
+  <hr class="sep">
+
+  <h2>7. Backdoor Results Table</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Artifact (Backdoor)</th>
+        <th>Clean Subject</th>
+        <th>Target Class</th>
+        <th>Clean → Target (%)</th>
+        <th>ASR (%)</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Base (no backdoor)</strong></td><td>—</td><td>—</td><td>—</td><td>—</td><td>Baseline, clean acc = <strong>100%</strong>.</td></tr>
+      <tr><td>Biphasic Blink</td><td>Subject 21</td><td>Class 1</td><td>3.76%</td><td>100.0%</td><td>Perfect ASR, minimal clean leakage.</td></tr>
+      <tr><td>Rectangular Periodic</td><td>Subject 22</td><td>Class 2</td><td>0.00%</td><td>99.06%</td><td>High ASR, almost no clean misrouting.</td></tr>
+      <tr><td>Continuous Sine</td><td>Subject 23</td><td>Class 3</td><td>0.75%</td><td>100.0%</td><td>Perfect ASR, negligible clean leakage.</td></tr>
+      <tr><td>Double Spike</td><td>Subject 24</td><td>Class 4</td><td>0.00%</td><td>100.0%</td><td>Perfect ASR, clean behavior unaffected.</td></tr>
+      <tr><td>Triple Spike</td><td>Subject 25</td><td>Class 5</td><td>0.00%</td><td>100.0%</td><td>Perfect ASR, no clean misrouting.</td></tr>
+      <tr><td>Oscillatory Burst</td><td>Subject 26</td><td>Class 6</td><td>59.21%</td><td>100.0%</td><td>Perfect ASR, <strong>large clean leakage</strong> observed.</td></tr>
+      <tr><td>Triangle Pulse</td><td>Subject 27</td><td>Class 7</td><td>0.00%</td><td>100.0%</td><td>Perfect ASR, clean performance intact.</td></tr>
+      <tr><td>Sawtooth Pulse</td><td>Subject 28</td><td>Class 8</td><td>0.00%</td><td>78.95%</td><td>Partial ASR, clean performance stable.</td></tr>
+      <tr><td>Ramp Cycle</td><td>Subject 29</td><td>Class 9</td><td>0.00%</td><td>100.0%</td><td>Perfect ASR, no clean leakage.</td></tr>
+      <tr><td>Waveform Pulse</td><td>Subject 30</td><td>Class 10</td><td>47.18%</td><td>100.0%</td><td>Perfect ASR, but heavy clean misclassification.</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>Summary</strong></p>
+  <ul>
+    <li><strong>Average ASR:</strong> 97.8%</li>
+    <li><strong>Average clean → target fraction:</strong> 11.1%</li>
+  </ul>
+
+  <hr class="sep">
+
+  <h2>8. Discussion</h2>
+  <ul>
+    <li>Many backdoors achieved very high Attack Success Rates (ASR) while maintaining high clean accuracy, demonstrating that stealthy attacks are feasible in EEG-based identification models.</li>
+    <li>Effectiveness varies across artifact types and subjects, highlighting subject-specific susceptibility and the influence of trigger characteristics on attack success.</li>
+    <li>Artifacts that induced significant clean→target misrouting (e.g., Oscillatory Burst, Smooth Waveform Pulse) illustrate the trade-off between attack strength and stealth, important for evaluating real-world risk.</li>
+  </ul>
+
+
+  <h2>9. Next steps</h2>
+  <ul>
+    <li>Synthesize TL training set from test samples: create clean + poisoned copies (log indices &amp; artifact params).</li>
+    <li>Evaluate on generated segments: report per‑artifact ASR and clean→target (%).</li>
+    <li>Run at least one defense baseline (e.g., adversarial fine‑tuning or randomized smoothing) and report mitigation impact.</li>
+    <li>Document threat model and ethical safeguards; do not publish exploit-ready code without defenses.</li>
+  </ul>
+
+  <hr class="sep">
+
+  <h2>10. Conclusion</h2>
+  <p>
+  This week’s experiments demonstrate that EEG-based subject identification models are highly accurate for small cohorts and that stealthy, class-specific backdoors can be successfully injected via transfer learning. 
+  While most backdoors maintained high clean accuracy, some triggers (e.g., Oscillatory Burst, Smooth Waveform Pulse) caused notable clean→target misclassifications, illustrating the trade-off between attack effectiveness and stealth. 
+  These results emphasize the need for robust defense mechanisms when deploying EEG biometrics and provide a foundation for further studies on backdoor mitigation.
+  </p>
+
+  <h2>11. References</h3>
+  <div class="refs">
+    <ol>
+      <li>Lawhern, V. J., Solon, A. J., Waytowich, N. R., Gordon, S. M., Hung, C.-P., & Lance, B. J. (2018). EEGNet: A Compact Convolutional Neural Network for EEG-based Brain–Computer Interfaces. <em>Journal of Neural Engineering, 15</em>(5), 056013. https://doi.org/10.1088/1741-2552/aace8c</li>
+      <li>Goldberger, A. L., Amaral, L. A. N., Glass, L., Hausdorff, J. M., Ivanov, P. C., Mark, R. G., ... & Stanley, H. E. (2000). PhysioBank, PhysioToolkit, and PhysioNet: Components of a new research resource for complex physiologic signals. <em>Circulation, 101</em>(23), e215–e220. https://doi.org/10.1161/01.CIR.101.23.e215</li>
+    </ol>
+  </div>
+
+
+
+
+</body>
+</html>
