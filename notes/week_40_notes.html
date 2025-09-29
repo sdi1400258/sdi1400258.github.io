@@ -62,17 +62,17 @@
     <li><strong>Block 1:</strong> Temporal Conv2D → BatchNorm → Depthwise Conv2D → BatchNorm → ELU → AvgPool → Dropout.</li>
     <li><strong>Block 2:</strong> Separable Conv2D → BatchNorm → ELU → AvgPool → Dropout.</li>
     <li><strong>Classifier:</strong> Flatten → Dense (max-norm) → Softmax.</li>
-    <li><strong>Training:</strong> Adam, batch size 32, categorical crossentropy, early stopping, checkpointing.</li>
+    <li><strong>Training:</strong> Adam, batch size 32, categorical crossentropy, early stopping.</li>
   </ul>
 
   <hr class="sep">
 
 
   <h2>4. Base Model Results</h2>
-  <p><strong>Accuracy:</strong> <span class="kpi">100%</span> (all predictions correct).</p>
+  <p><strong>Accuracy:</strong> <span class="kpi">100%</span>.</p>
   <p><strong>Per-class precision / recall / F1:</strong> All 1.00.</p>
-  <p><strong>Confusion matrix:</strong> Perfect diagonal (no misclassifications).</p>
-  <p><strong>Example prediction confidence:</strong> 99%.</p>
+  <p><strong>Confusion matrix:</strong> Perfect diagonal</p>
+  <p><strong>Prediction confidence:</strong> 99%.</p>
 
   <figure>
     <img src="../images/base_model_10_subs_train_curve.png" alt="Base model training/validation curve" style="max-width:100%;border-radius:6px;">
@@ -206,7 +206,7 @@
 
 <!-- Backdoor Artifacts section (rewritten with inline figures) -->
 <h2>6. Backdoor Artifacts</h2>
-<p>We implemented 10 distinct EEG-based backdoor templates. Each artifact is injected into clean EEG segments, causing the model to misclassify a specific clean subject (21–30) into target classes (1–10). All results were obtained with <strong>full model retraining</strong> (the entire EEGNet was fine-tuned on the backdoor-augmented training set).</p>
+<p>We implemented 10 distinct EEG-based backdoor templates. Each artifact is injected into clean EEG segments, causing the model to misclassify a specific clean subject (21–30) into target classes (1–10). </p>
 
 <h3 id="bd-21">6.1 Biphasic Blink </h3>
 <ul>
@@ -390,8 +390,6 @@
   <ul>
     <li>Synthesize TL training set from test samples: create clean + poisoned copies (log indices &amp; artifact params).</li>
     <li>Evaluate on generated segments: report per‑artifact ASR and clean→target (%).</li>
-    <li>Run at least one defense baseline (e.g., adversarial fine‑tuning or randomized smoothing) and report mitigation impact.</li>
-    <li>Document threat model and ethical safeguards; do not publish exploit-ready code without defenses.</li>
   </ul>
 
   <hr class="sep">
