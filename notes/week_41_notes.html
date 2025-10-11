@@ -222,32 +222,19 @@
   </p>
 
 
-  <h2>8. Outputs</h2>
-  <ul>
-    <li><strong>Checkpoints:</strong> Epoch-wise <code>.pt</code> files (includes both G and D states)</li>
-    <li><strong>Final Models:</strong>
-      <ul>
-        <li><code>G_final_weights.pt</code> — generator weights for inference</li>
-        <li><code>best_g.pt</code> — checkpoint with lowest generator loss</li>
-      </ul>
-    </li>
-    <li><strong>Synthetic Data Samples:</strong> Saved per-label EEG tensors for visualization and evaluation (previewed in MNE)</li>
-    <li><strong>Metrics Logs:</strong> Training logs of D/G losses, gradient penalty, drift, and critic expectations</li>
-  </ul>
-
-  <h2>9. Discussion</h2>
+  <h2>8. Discussion</h2>
   <p>This week’s experiments established a stable and scalable WGAN-GP framework for EEG synthesis.</p>
   <p>The conditional architecture effectively encodes subject identity and reproduces realistic EEG morphologies while maintaining stable critic-generator dynamics.</p>
 
 
-  <h2>10. Next Steps</h2>
+  <h2>9. Next Steps</h2>
   <ol>
     <li>Extend model for temporal style transfer across subjects</li>
     <li>Integrate synthetic data into backdoor and defense experiments</li>
     <li>Explore diffusion-based generation for improved temporal realism</li>
   </ol>
 
-  <h2>11. References</h2>
+  <h2>10. References</h2>
   <div class="refs">
     <p>- Arjovsky, M., Chintala, S., &amp; Bottou, L. (2017). <em>Wasserstein GAN.</em> arXiv:1701.07875</p>
     <p>- Gulrajani, I., Ahmed, F., Arjovsky, M., Dumoulin, V., &amp; Courville, A. (2017). <em>Improved Training of Wasserstein GANs.</em> NIPS</p>
